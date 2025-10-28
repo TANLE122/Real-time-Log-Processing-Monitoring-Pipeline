@@ -1,0 +1,48 @@
+version: "3.1"
+
+services:
+  spark-master:
+    image: apache/spark:3.5.0
+    container_name: spark-master
+    command: >
+      bash -c "/opt/spark/sbin/start-master.sh && tail -f /opt/spark/logs/*"
+    environment:
+      - SPARK_MODE=master
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8180
+    ports:
+      - "8180:8180"   # Spark Master Web UI
+      - "7077:7077"   # Spark Master RPC
+    # Kết nối chung network với Kafka
+    volumes:
+      - ./app:/opt/app
+
+  spark-worker:
+    image: apache/spark:3.5.0
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    command: >
+      bash -c "/opt/spark/sbin/start-worker.sh spark://spark-master:7077 && tail -f /opt/spark/logs/*"    environment:
+      - SPARK_MODE=worker
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_WEBUI_PORT=8181
+    ports:
+      - "8181:8181"   # Worker UI
+    volumes:
+      - ./app:/opt/app
+
+  spark-submit:
+    image: apache/spark:3.5.0
+    container_name: spark-submit
+    depends_on:
+      - spark-master
+      - spark-worker
+    volumes:
+      - ./app:/opt/app
+      - ./ivy2:/home/spark/.ivy2
+    entrypoint: ["/bin/bash"]
+    tty: true
+  # Dùng network của Kafka bạn đã dựng
