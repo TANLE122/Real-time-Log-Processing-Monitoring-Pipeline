@@ -10,7 +10,7 @@ spark = SparkSession.builder \
 
 spark.sparkContext.setLogLevel("WARN")
 
-# 🔹 Đọc dữ liệu streaming từ Kafka
+# 🔹 Đọc dữ liệu streaming từ Kafk
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka_broker:29092") \

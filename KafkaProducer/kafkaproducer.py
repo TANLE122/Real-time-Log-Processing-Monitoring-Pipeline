@@ -6,7 +6,7 @@ TOPIC = 'assec_log'
 producer  = KafkaProducer(bootstrap_servers=[kafka_broker])
 
 process = subprocess.Popen(
-    ['python', 'log_faker.py', '-n', '10', '-o', 'CONSOLE', '-s', '1.5'],
+    ['python', 'log_faker.py', '-n', '1000', '-o', 'CONSOLE', '-s', '1.5'],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     universal_newlines=True
