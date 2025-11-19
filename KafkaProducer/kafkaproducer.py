@@ -1,12 +1,12 @@
 from kafka import KafkaProducer
 import subprocess
 kafka_broker = 'localhost:9092'
-TOPIC = 'assec_log'
+TOPIC = 'assec_log1'
 
 producer  = KafkaProducer(bootstrap_servers=[kafka_broker])
 
 process = subprocess.Popen(
-    ['python', 'log_faker.py', '-n', '1000', '-o', 'CONSOLE', '-s', '1.5'],
+    ['python', 'log_faker.py', '-n', '500', '-o', 'CONSOLE', '-s', '1.5'],
     stdout=subprocess.PIPE,
     stderr=subprocess.PIPE,
     universal_newlines=True

@@ -6,16 +6,18 @@ from pyspark.sql.functions import col,count,when,round,sum,avg,countDistinct,win
 spark = SparkSession.builder \
     .appName("Processiongdatafromkafka") \
     .master("spark://spark-master:7077") \
-    .config("spark.jars.packages","org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.elasticsearch:elasticsearch-spark-30_2.12:9.0.0") \
+    .config("spark.jars.packages","org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0,org.elasticsearch:elasticsearch-spark-30_2.12:8.13.4") \
     .getOrCreate()
 spark.sparkContext.setLogLevel("WARN")
 
 
 df = spark.readStream \
     .format("kafka") \
-    .option("kafka.bootstrap.servers","kafka_broker:29092") \
-    .option("subscribe","assec_log") \
-    .option("startingOffsets","earliest") \
+    .option("kafka.bootstrap.servers", "kafka_broker:29092") \
+    .option("subscribe", "assec_log1") \
+    .option("startingOffsets", "earliest") \
+    .option("failOnDataLoss", "false") \
+    .option("kafka.group.id", "new_consumer_group_for_topic1") \
     .load()
 
 kafka_df = df.selectExpr("CAST(key AS STRING)","CAST(value AS STRING)","topic","partition","offset","timestamp")
@@ -125,7 +127,6 @@ top_endpoints_output = top_endpoints_df.select(
 
 Checkpoin_path = "/tmp/spark_checkpoints/kafka_spark_streaming_app"
 
-
 query = parsed_df.writeStream \
     .outputMode("append") \
     .format("console") \
@@ -146,14 +147,31 @@ query = parsed_df.writeStream \
 #     .option("es.net.http.auth.pass", "01042004") \
 #     .option("checkpointLocation",Checkpoin_path) \
 #     .start()
-insert_index = parsed_df.writeStream \
-    .outputMode("append") \
+def write_to_es(batch_df, batch_id):
+    batch_df.write \
     .format("org.elasticsearch.spark.sql") \
-    .option("es.resource","raw_log") \
-    .option("es.nodes","elasticsearch") \
-    .option("es.port","9200") \
+    .option("es.resource", "raw_log") \
+    .option("es.nodes", "elasticsearch") \
+    .option("es.port", "9200") \
+    .option("es.nodes.wan.only", "true") \
     .option("es.net.http.auth.user", "elastic") \
     .option("es.net.http.auth.pass", "01042004") \
-    .option("checkpointLocation","/tmp/spark_checkpoints/es_rawlog") \
+    .mode("append") \
+    .save()
+
+query = parsed_df.writeStream \
+    .outputMode("append") \
+    .foreachBatch(write_to_es) \
+    .option("checkpointLocation", "/tmp/spark_checkpoints/es_rawlog") \
     .start()
+# insert_index = parsed_df.writeStream \
+#     .outputMode("append") \
+#     .format("org.elasticsearch.spark.sql") \
+#     .option("es.resource","raw_log") \
+#     .option("es.nodes","elasticsearch") \
+#     .option("es.port","9200") \
+#     .option("es.net.http.auth.user", "elastic") \
+#     .option("es.net.http.auth.pass", "01042004") \
+#     .option("checkpointLocation","/tmp/spark_checkpoints/es_rawlog") \
+#     .start()
 query.awaitTermination()
