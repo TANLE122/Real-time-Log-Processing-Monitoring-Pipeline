@@ -12,7 +12,7 @@ services:
       - SPARK_MASTER_WEBUI_PORT=8180
     ports:
       - "8180:8180"   # Spark Master Web UI
-      - "7077:7077"   # Spark Master RPC
+      - "7077:7077"   # Spark Master RP
     # Kết nối chung network với Kafka
     volumes:
       - ./app:/opt/app
@@ -37,6 +37,8 @@ services:
   spark-submit:
     image: apache/spark:3.5.0
     container_name: spark-submit
+    ports:
+      - "4040:4040"   # Spark Application UI
     depends_on:
       - spark-master
       - spark-worker
