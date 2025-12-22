@@ -15,7 +15,7 @@ spark.sparkContext.setLogLevel("WARN")
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka_broker:29092") \
-    .option("subscribe", "assec_log1") \
+    .option("subscribe", "acess_log") \
     .option("startingOffsets", "earliest") \
     .option("failOnDataLoss", "false") \
     .option("kafka.group.id", "new_consumer_group_for_topic1") \
@@ -47,13 +47,13 @@ window_duration = "5 seconds"
 watermarked_df = metric_df.withWatermark("timestamp_ts", "10 seconds")
 
 # ===========================================================
-# 4. METRIC 1 + 2 + 3: REQUEST PER SECOND + ERROR RATE + RANK
+# 4. METRIC 1 + 2 + 3: REQUEST PER SECOND + ERROR RATE + RAN///////////////////////////////////////////////////////////////////////////////////////K
 # ===========================================================
 endpoint_metrics = watermarked_df.groupBy(
     F.window("timestamp_ts", window_duration),
     "request"
 ).agg(
-    (F.count("*") / 5).alias("requests_per_second"),
+    (F.count("*")).alias("requests_per_five_second"),
     (
         F.sum(F.when((F.col("status").startswith("4")) | (F.col("status").startswith("5")), 1)
               .otherwise(0)) / F.count("*")
@@ -61,51 +61,49 @@ endpoint_metrics = watermarked_df.groupBy(
 )
 
 # Ranking endpoint theo request_per_second
-rank_window = Window.partitionBy("window").orderBy(F.desc("requests_per_second"))
-endpoint_metrics = endpoint_metrics.withColumn("ranked_endpoints", F.rank().over(rank_window))
+# rank_window = Window.partitionBy("window").orderBy(F.desc("requests_per_second"))
+# endpoint_metrics = endpoint_metrics.withColumn("ranked_endpoints", F.rank().over(rank_window))
 
 # ===========================================================
 # 5. METRIC 4: TOP IP THEO WINDOW
 # ===========================================================
-ips = watermarked_df.groupBy(
-    F.window("timestamp_ts", window_duration),
-    "ip"
-).agg(
-    F.count("*").alias("ip_count")
-)
+# ips = watermarked_df.groupBy(
+#     F.window("timestamp_ts", window_duration),
+#     "ip"
+# ).agg(
+#     F.count("*").alias("ip_count")
+# )
 
-ip_rank_window = Window.partitionBy("window").orderBy(F.desc("ip_count"))
-ips_ranked = ips.withColumn("rank", F.rank().over(ip_rank_window)) \
-                .filter("rank <= 10")
+# ip_rank_window = Window.partitionBy("window").orderBy(F.desc("ip_count"))
+# ips_ranked = ips.withColumn("rank", F.rank().over(ip_rank_window)) \
+#                 .filter("rank <= 10")
 
-top_ips = ips_ranked.groupBy("window").agg(
-    F.collect_list(F.struct("ip", "ip_count")).alias("top_ips")
-)
+# top_ips = ips_ranked.groupBy("window").agg(
+#     F.collect_list(F.struct("ip", "ip_count")).alias("top_ips")
+# )
 
 # ===========================================================
 # 6. METRIC 5: TOP USER AGENT THEO WINDOW
 # ===========================================================
-agents = watermarked_df.groupBy(
-    F.window("timestamp_ts", window_duration),
-    "user_agent"
-).agg(
-    F.count("*").alias("ua_count")
-)
+# agents = watermarked_df.groupBy(
+#     F.window("timestamp_ts", window_duration),
+#     "user_agent"
+# ).agg(
+#     F.count("*").alias("ua_count")
+# )
 
-ua_rank_window = Window.partitionBy("window").orderBy(F.desc("ua_count"))
-agents_ranked = agents.withColumn("rank", F.rank().over(ua_rank_window)) \
-                      .filter("rank <= 10")
+# ua_rank_window = Window.partitionBy("window").orderBy(F.desc("ua_count"))
+# agents_ranked = agents.withColumn("rank", F.rank().over(ua_rank_window)) \
+#                       .filter("rank <= 10")
 
-top_agents = agents_ranked.groupBy("window").agg(
-    F.collect_list(F.struct("user_agent", "ua_count")).alias("top_user_agents")
-)
+# top_agents = agents_ranked.groupBy("window").agg(
+#     F.collect_list(F.struct("user_agent", "ua_count")).alias("top_user_agents")
+# )
 
 # ===========================================================
 # 7. GHÉP TẤT CẢ METRIC THÀNH 1 DATAFRAME
 # ===========================================================
 overview_metric = endpoint_metrics \
-    .join(top_ips, on="window", how="left") \
-    .join(top_agents, on="window", how="left") \
     .withColumn("window_start", F.date_format(F.col("window.start"), "yyyy-MM-dd HH:mm:ss")) \
     .withColumn("window_end", F.date_format(F.col("window.end"), "yyyy-MM-dd HH:mm:ss")) \
     .drop("window")
@@ -117,7 +115,7 @@ def write_to_metric_es(overview_metric, epoch_id):
     .option("es.nodes", "elasticsearch") \
     .option("es.port", "9200") \
     .option("es.net.http.auth.user", "elastic") \
-    .option("es.net.http.auth.pass", "01042004") \
+    .option("es.net.http.auth.pass", "09092004") \
     .mode("append") \
     .save
 
@@ -128,7 +126,7 @@ def write_to_rawlog_es(parse_df,batch_id):
     .option("es.nodes", "elasticsearch") \
     .option("es.port",9200) \
     .option("es.net.http.auth.user","elastic") \
-    .option("es.net.http.auth.pass","01042004") \
+    .option("es.net.http.auth.pass","09092004") \
     .mode("append") \
     .save
 

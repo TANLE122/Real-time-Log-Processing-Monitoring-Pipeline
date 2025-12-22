@@ -1,9 +1,8 @@
-version: "3.1"
-
+version: '3.8'
 services:
   spark-master:
     image: apache/spark:3.5.0
-    container_name: spark-master
+    container_name: spark-master-1
     command: >
       bash -c "/opt/spark/sbin/start-master.sh && tail -f /opt/spark/logs/*"
     environment:
@@ -47,4 +46,9 @@ services:
       - ./ivy2:/home/spark/.ivy2
     entrypoint: ["/bin/bash"]
     tty: true
+
+networks:
+  default:
+    external: true
+    name: doan_default
   # Dùng network của Kafka bạn đã dựng

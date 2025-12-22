@@ -6,14 +6,18 @@ services:
     container_name: elasticsearch
     environment:
       - discovery.type=single-node
+      # Tắt bảo mật để dễ cấu hình (hoặc thiết lập thủ công sau)
+      # Giữ nguyên bảo mật (đề xuất)
       - xpack.security.enabled=true
       - xpack.security.http.ssl.enabled=false
       - network.host=0.0.0.0
       - ES_JAVA_OPTS=-Xms1g -Xmx1g
-      - ELASTIC_PASSWORD=01042004   # Mật khẩu user "elastic"
+      # Đây là mật khẩu cho người dùng 'elastic' (super-user)
+      - ELASTIC_PASSWORD=01042004 
     ports:
       - "9200:9200"
     volumes:
+      # SỬ DỤNG VOLUME để dữ liệu (và thông tin bảo mật/mật khẩu) được duy trì
       - es_data:/usr/share/elasticsearch/data
 
   kibana:
@@ -21,12 +25,20 @@ services:
     container_name: kibana
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-      - ELASTICSEARCH_USERNAME=kibana_system
-      - ELASTICSEARCH_PASSWORD=d7bzp_ftJmVQR0gIwieT
+      # **Thay đổi quan trọng:** Sử dụng người dùng `elastic` và mật khẩu đã đặt
+      # để Kibana có thể kết nối và cấu hình chính nó.
+      - ELASTICSEARCH_USERNAME=kibana_system 
+      - ELASTICSEARCH_PASSWORD=01042004
     ports:
       - "5601:5601"
     depends_on:
       - elasticsearch
+    # Đảm bảo Kibana chờ ES sẵn sàng trước khi cố gắng kết nối
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -I http://elasticsearch:9200 | grep -q 'HTTP/1.1 200 OK'"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
 
 volumes:
   es_data:

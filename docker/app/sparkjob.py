@@ -3,7 +3,11 @@ from pyspark.sql.functions import col,regexp_extract
 import re
 from pyspark.sql.functions import date_format
 from pyspark.sql.functions import col,count,when,round,sum,avg,countDistinct,window,to_timestamp,approx_count_distinct
-
+import os
+from dotenv import load_dotenv
+load_dotenv()
+db_user = os.getenv("DB_USER")
+db_password = os.getenv("DB_PASSWORD")
 spark = SparkSession.builder \
     .appName("Processiongdatafromkafka") \
     .master("spark://spark-master:7077") \
@@ -14,7 +18,7 @@ spark.sparkContext.setLogLevel("WARN")
 df = spark.readStream \
     .format("kafka") \
     .option("kafka.bootstrap.servers", "kafka_broker:29092") \
-    .option("subscribe", "acess_log1") \
+    .option("subscribe", "acess_log") \
     .option("startingOffsets", "earliest") \
     .option("failOnDataLoss", "false") \
     .option("kafka.group.id", "new_consumer_group_for_topic1") \
@@ -35,10 +39,14 @@ parsed_df = kafka_df.select(
     regexp_extract(col("value"),pattern,7).alias("user_agent")
 )
 metric_df = parsed_df.withColumn("status_code_int", col("status").cast("integer")) \
-                     .withColumn("bytes_int", col("bytes").cast("integer")) \
-                     .withColumn("timestamp_ts", col("timestamp").cast("timestamp"))
+    .withColumn("bytes_int", col("bytes").cast("integer")) \
+    .withColumn("timestamp_ts", col("timestamp").cast("timestamp")) \
+    .withColumn(
+        "log_time",
+        to_timestamp(col("datetime"), "dd/MMM/yyyy:HH:mm:ss Z")
+    )
 # Cấu hình cửa sổ: 1 phút (1 minute window)
-window_duration = "10 seconds" 
+window_duration = "5 seconds" 
 # Tính toán các metric cơ bản trong mỗi cửa sổ 1 phút
 metric_df_watermarked = metric_df.withWatermark("timestamp_ts", "5 seconds")
 rpm_df = metric_df_watermarked.groupBy(
@@ -57,7 +65,7 @@ endpoint_df = metric_df.withColumn(
     "endpoint",
     regexp_extract(col("request"), r'^\S+\s+(\S+)\s+\S+$', 1) 
 )
-window_duration = "10 seconds" 
+window_duration = "5 seconds" 
 
 # Tính toán các metric cơ bản trong mỗi cửa sổ 1 phút (rpm_df)
 # (Bao gồm total_requests, total_bytes, active_ip_count)
@@ -76,17 +84,15 @@ final_metrics_df = rpm_df.withColumn(
     round(col("total_bytes") / col("total_requests"), 2)
 )
 
-# Chọn các cột cần thiết (bao gồm Average Response Size và Active IP Count)
 overview_metrics = final_metrics_df.select(
     date_format(col("window.start"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").alias("window_start"),
     date_format(col("window.end"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").alias("window_end"),
     col("request_per_minute"),
     col("error_rate_percent"),
-    col("average_response_size"), # <-- Đã có
-    col("active_ip_count") # <-- Đã có (dùng approx_count_distinct)
+    col("average_response_size"), 
+    col("active_ip_count") 
 )
-# Cấu hình cửa sổ: 1 phút
-window_duration = "10 seconds "
+
 top_endpoints_df = endpoint_df.groupBy(
     window(col("timestamp_ts"), window_duration),
     col("endpoint")
@@ -115,8 +121,6 @@ final_metrics_df = rpm_df.withColumn(
     "average_response_size",
     round(col("total_bytes") / col("total_requests"), 2)
 )
-
-# Chọn các cột cần thiết cho Elasticsearch (Metric Overview)
 overview_metrics = final_metrics_df.select(
     date_format(col("window.start"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").alias("window_start"),
     date_format(col("window.end"), "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").alias("window_end"),
@@ -125,10 +129,7 @@ overview_metrics = final_metrics_df.select(
     col("average_response_size"),
     col("active_ip_count")
 )
-
 Checkpoin_path = "/tmp/spark_checkpoints/kafka_spark_streaming_app"
-
-
 
 # query = parsed_df.writeStream \
 #     .outputMode("append") \
@@ -153,12 +154,12 @@ Checkpoin_path = "/tmp/spark_checkpoints/kafka_spark_streaming_app"
 def write_to_es(batch_df, batch_id):
     batch_df.write \
     .format("org.elasticsearch.spark.sql") \
-    .option("es.resource", "raw_log") \
+    .option("es.resource", "raw_log1") \
     .option("es.nodes", "elasticsearch") \
     .option("es.port", "9200") \
     .option("es.nodes.wan.only", "true") \
-    .option("es.net.http.auth.user", "elastic") \
-    .option("es.net.http.auth.pass", "01042004") \
+    .option("es.net.http.auth.user", db_user) \
+    .option("es.net.http.auth.pass", db_password) \
     .mode("append") \
     .save()
 
@@ -169,8 +170,8 @@ def write_metric_to_es(overview_metrics ,batch_id):
     .option("es.nodes","elasticsearch") \
     .option("es.port","9200") \
     .option("es.nodes.wan.only","true") \
-    .option("es.net.http.auth.user","elastic") \
-    .option("es.net.http.auth.pass","01042004") \
+    .option("es.net.http.auth.user", db_user) \
+    .option("es.net.http.auth.pass", db_password) \
     .mode("append") \
     .save()
 # query1 = overview_metrics.writeStream \
